@@ -1,0 +1,524 @@
+---
+title: "Madaraka_Day_Speech_Analysis"
+author: Allan Ouko
+date: 05/08/2021
+output: html_document
+---
+
+# About the Project
+This project involves analyzing President Uhuru's Madaraka Day speech of 2020 and 2021. The project's main aim is to gain insights of the general idea of the two speeches. The project covers the following.
+
+**Reading text data**
+**Tidying text data**
+**Creating and analyzing bigrams**
+**Visualization**
+**Sentiment analysis**
+
+# 1: Loading the Required Packages
+The project will require the following r packages installed and loaded.
+
+```{r, message = FALSE}
+library(wordcloud) #for visualizing 
+library(tidyverse) #for various data manipulation tasks
+library(tidytext) #for text mining specifically, main package in book
+library(stringr) #for various text operations
+library(readtext) # for reading in txt files
+library(igraph) # for creating networks of bigrams
+library(ggraph) # for visualizing networks of bigrams
+```
+
+# 2: Reading the Data in R
+Since the data are in the Folder "Madaraka_Day_Speech," we can read the data in two ways:
+
+## Reading all the files in the folder
+
+```{r}
+Speech = readtext("Madaraka_Day_Speech/")
+```
+
+## Reading individual files
+Since we are working with two files only, we will also read the data into r for further data manipulation.
+
+```{r}
+Speech_2020 = readtext("Madaraka_Day_Speech/2020.txt")
+Speech_2021 = readtext("Madaraka_Day_Speech/2021.txt")
+```
+
+# 3: Tidying the Data
+The data is in text format, hence the first step is to put it in a dataframe.
+For all the files;
+
+```{r}
+Speech_DF = tibble(line =1,text = Speech)
+Speech_DF
+```
+
+For the individual files;
+
+```{r}
+Speech_2020_DF = tibble(line =1,text = Speech_2020)
+Speech_2020_DF
+
+Speech_2021_DF = tibble(line =1,text = Speech_2021)
+Speech_2021_DF
+```
+
+## Further Text Analysis
+Using unnest_tokens(), we convert the data into tidy format, remove the punctuation and converts the words into lower case
+
+For all the files;
+
+```{r, warning = FALSE}
+Speech_tidy = Speech_DF %>%
+  unnest_tokens(word, text) %>% 
+  anti_join(stop_words) %>% count(word,sort = T)
+Speech_tidy
+```
+
+For individual files;
+
+```{r, warning = FALSE}
+Speech_2020_tidy = Speech_2020_DF %>%
+  unnest_tokens(word, text) %>% 
+  anti_join(stop_words) %>% count(word,sort = T)
+Speech_2020_tidy
+
+Speech_2021_tidy = Speech_2021_DF %>%
+  unnest_tokens(word, text) %>% 
+  anti_join(stop_words) %>% count(word,sort = T)
+Speech_2021_tidy
+```
+
+## Removing numbers from the data.
+We remove numbers which may make the analysis meaningless.
+
+For all the files;
+
+```{r}
+Speech_no = Speech_tidy[-grep("^[0-9]+", Speech_tidy$word),]
+Speech_no
+```
+
+For the individual files;
+
+```{r}
+Speech_2020_no = Speech_2020_tidy[-grep("^[0-9]+", Speech_2020_tidy$word),]
+Speech_2020_no
+
+Speech_2021_no = Speech_2021_tidy[-grep("^[0-9]+", Speech_2021_tidy$word),]
+Speech_2021_no
+```
+
+## Analyzing the 2020 and 2021 speeches.
+We analyze both the 2020 and 2021 speeches individualy, convert it to a tibble, remove the stopwords and numbers to get it ready for visualization.
+
+### 2020 Speech
+```{r}
+Speech_2020_rem = Speech_2020 %>% tibble() %>%
+  unnest_tokens(word, text) %>% 
+  anti_join(stop_words) %>% count(word,sort = T)
+Speech_2020_rem
+
+Speech_2020_Ready = Speech_2020_rem[-grep("^[0-9]+", Speech_2020_rem$word),] %>% filter(word != "page")
+Speech_2020_Ready
+```
+
+### 2021 Speech
+```{r}
+Speech_2021_rem = Speech_2021 %>% tibble() %>% 
+  unnest_tokens(word, text) %>% 
+  anti_join(stop_words) %>% group_by(doc_id) %>% count(word,sort = T)
+Speech_2021_rem
+
+Speech_2021_Ready = Speech_2021_rem[-grep("^[0-9]+", Speech_2021_rem$word),] %>% filter(word != "page")
+Speech_2021_Ready
+```
+
+# 4: Visualizing the Data in a Bar Graph Using ggplot2
+
+## 2020 Speech
+
+```{r}
+Madaraka_2020_graph = Speech_2020_Ready %>%
+  filter(n > 15) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip()
+Madaraka_2020_graph
+```
+
+## 2021 Speech
+
+```{r}
+Madaraka_2021_graph = Speech_2021_Ready %>%
+  filter(n > 15) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip()
+Madaraka_2021_graph
+```
+
+```{r,  message = FALSE}
+library(gridExtra)
+grid.arrange(Madaraka_2020_graph, Madaraka_2021_graph)
+```
+
+# 5: Term frequency and inverse document frequency (tf-idf)
+tf-idf checks how important a word is to a document in a collection of documents.
+We check the words in the two files. Hence we use the 'Speech' file.
+
+```{r}
+Madaraka_Speech = Speech %>% tibble() %>% 
+  unnest_tokens(word, text) %>% count(doc_id,word,sort = T)
+Madaraka_Speech
+
+Madaraka_Speech_DF = tibble(line =1,text = Madaraka_Speech)
+
+Madaraka_Speech_no = Madaraka_Speech %>% anti_join(stop_words)
+Madaraka_Speech_no
+```
+
+The data shows there are some words that occur repeatedly in the text and may not be meaningful in the analysis. Hence we have to define the words and remove them and the numbers in the data.
+
+```{r}
+meaningless_words = tibble(word = c("kenya","fathers", "ksh", "founding", "kenyans", "fellow", "day", "nation", "national"))
+Madaraka_Speech_rem = Madaraka_Speech_no %>% anti_join(meaningless_words)
+Madaraka_Speech_rem
+
+Madaraka_Speech_tidy = Madaraka_Speech_rem[-grep("^[0-9]+", Madaraka_Speech_rem$word),] %>% filter(word != "page")
+Madaraka_Speech_tidy
+```
+
+## check the total words in the data
+```{r}
+total_words = Madaraka_Speech_tidy %>% group_by(doc_id) %>% 
+  summarize(total = sum(n))
+total_words
+```
+
+## Left join
+The function merges the two tables with matching words.
+
+```{r}
+Madaraka_Speech_join = left_join(Madaraka_Speech_tidy, total_words)
+Madaraka_Speech_join
+```
+
+## Term Frequency
+```{r}
+Madaraka_Speech_freq = Madaraka_Speech_join %>% mutate(rank = row_number(),tf = n/total)
+Madaraka_Speech_freq
+```
+
+## bind tf-idf function
+```{r}
+Speech_words_2020 = Madaraka_Speech_join %>%
+  bind_tf_idf(word, doc_id , n) %>% arrange(desc(tf_idf))
+Speech_words_2020 %>% filter(doc_id == "2020.txt")
+
+Speech_words_2021 = Madaraka_Speech_join %>%
+  bind_tf_idf(word, doc_id , n) %>% arrange(desc(tf_idf))
+Speech_words_2021 %>% filter(doc_id == "2021.txt")
+```
+
+Where: 
+1. n is the number of times the word is appears in the speech.
+2. total is the total number of words in the speech.
+3. The words with the highest frequency are the stop words.
+
+
+# 6: Sentiment Analysis/Opinion Mining
+
+## Get the relevant dictionaries for Sentiment Analysis
+
+```{r}
+get_sentiments("afinn")
+get_sentiments("bing")
+get_sentiments("nrc")
+```
+
+Get the sentiments expressed in the speech.
+```{r}
+Sentiments = Speech %>% tibble() %>% 
+  unnest_tokens(word, text) %>% 
+  anti_join(stop_words) %>% group_by(doc_id) %>% inner_join(get_sentiments("bing"))
+Sentiments
+```
+
+
+```{r}
+### 2020 Speech
+Sentiments %>% filter(doc_id == "2020.txt") %>% group_by(sentiment) %>% count(sentiment, sort = T)
+```
+
+### 2021 Speech
+```{r}
+Sentiments %>% filter(doc_id == "2021.txt") %>% group_by(sentiment) %>% count(sentiment, sort = T)
+```
+
+```{r}
+Sentiments_analysis = function(x){
+    sent = Sentiments %>% 
+    group_by(sentiment) %>% 
+    count(sentiment, sort = T)
+    return(sent)}
+```
+
+
+```{r}
+Sentiments_analysis("Speech")
+Sentiments_analysis(filter(Speech, doc_id == "2020.txt"))
+```
+
+# 7: WordCloud Visualization
+```{r, warning = FALSE}
+Speech_words_2020 %>% 
+  with(wordcloud(unique(word), n, min.words = 1, max.words = 50, random.order = F
+                 , color = c("blue", "red"), scale = c(3, 0.3)))
+
+Speech_words_2021 %>% 
+  with(wordcloud(unique(word), n, min.words = 1, max.words = 100, random.order = F
+                 , color = c("blue", "red"), scale = c(2.5, 0.25)))
+```
+
+# 8: Word Frequencies
+We analyze the frequently used words in the speech.
+```{r}
+Madaraka_Speech_freq %>% count(word, sort = T)
+```
+### 2020 Speech
+```{r}
+Speech_words_2020 %>% count(word, sort = T)
+```
+### 2021 Speech
+```{r}
+Speech_words_2021 %>% count(word, sort = T)
+```
+
+```{r}
+Madaraka_Speech_F = Madaraka_Speech_tidy %>% 
+  group_by(doc_id) %>% 
+  count(word, sort = T)
+head(Madaraka_Speech_F, 10)
+```
+
+## Plotting word frequencies with bar graphs
+
+```{r}
+Madaraka_Speech_tidy %>% 
+  filter(n>6 & doc_id == "2020.txt") %>% 
+  ggplot(aes(x=n, y=reorder(word, n), fill=n)) +
+  geom_col(show.legend=FALSE) +
+  labs(
+    x = "Frequency",
+    y = "Word", 
+    title = "Most frequent words in 2020 Speech"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45))
+
+Madaraka_Speech_tidy %>% 
+  filter(n>10 & doc_id == "2021.txt") %>% 
+  ggplot(aes(x=n, y=reorder(word, n), fill=n)) +
+  geom_col(show.legend=FALSE) +
+  labs(
+    x = "Frequency",
+    y = "Word", 
+    title = "Most frequent words in 2021 Speech"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45))
+```
+
+# 9: Analyzing n-grams
+An n-gram is a combination of consecutive words of length n. Each bigram (n = 2), for example, consist of two words
+
+
+```{r}
+Speech_bigram_f = function(x){
+  speech_f = unnest_tokens(x, bigram, text, token = "ngrams", n = 2)
+  return(speech_f)
+}
+
+Speech_bigrams = Speech_bigram_f(Speech)
+Speech_bigrams
+Speech_2020_bigrams = Speech_bigram_f(Speech_2020)
+Speech_2020_bigrams
+Speech_2021_bigrams = Speech_bigram_f(Speech_2021)
+Speech_2021_bigrams
+```
+
+
+## Counting n-grams
+
+```{r}
+Speech_count = function(n_count){
+  n_gram_count = count(n_count, bigram) %>% arrange(desc(n))
+  return(n_gram_count)
+}
+
+Speech_count(Speech_bigrams)
+Speech_count(Speech_2020_bigrams)
+Speech_count(Speech_2021_bigrams)
+```
+
+## Removing stopwords from n-grams
+
+```{r}
+Speech_bigram_stop = function(no_stop){
+  del_stop = separate(no_stop, col = bigram,
+           into = c("word1", "word2"),
+           sep = " ",
+           remove = FALSE)
+  return(del_stop)
+}
+
+Speech_bigrams_no = Speech_bigram_stop(Speech_bigrams)
+Speech_bigrams_no
+Speech_2020_bigrams_no = Speech_bigram_stop(Speech_2020_bigrams)
+Speech_2020_bigrams_no
+Speech_2021_bigrams_no = Speech_bigram_stop(Speech_2021_bigrams)
+Speech_2021_bigrams_no
+```
+
+## Removing a row if it contains either words in stop words data
+
+```{r}
+Speech_bigrams_tidy = function(speech_tidy){
+  speech_clean = filter(speech_tidy, !word1 %in% stop_words$word & !word2 %in% stop_words$word)
+  return(speech_clean)
+}
+
+Speech_tidy = Speech_bigrams_tidy(Speech_bigrams_no)
+Speech_tidy
+Speech_2020_tidy = Speech_bigrams_tidy(Speech_2020_bigrams_no)
+Speech_2020_tidy
+Speech_2021_tidy = Speech_bigrams_tidy(Speech_2021_bigrams_no)
+Speech_2021_tidy
+```
+
+```{r}
+Speech_bigram_count =  function(bigram_count){
+  bigram_total = count(bigram_count, bigram, sort = TRUE)
+  return(bigram_total)
+}
+
+Speech_bigram_count(Speech_tidy)
+Speech_bigram_count(Speech_2020_tidy)
+Speech_bigram_count(Speech_2021_tidy)
+```
+
+## Plotting bigram Frequencies
+
+```{r}
+bigram_plot = function(bigram_freq){
+  freq_plot = count(bigram_freq,bigram, sort = TRUE) %>% 
+  filter(n > 3) %>% 
+  ggplot(aes(x = reorder(bigram, n),
+             y = n,
+             fill = n)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "frequency", title = "Most frequent bigrams in 2020 and 2021 Speech") +
+  coord_flip() +
+  theme_minimal()
+  return(freq_plot)
+}
+
+bigram_plot(Speech_tidy)
+bigram_plot(Speech_2020_tidy)
+bigram_plot(Speech_2021_tidy)
+```
+
+## tf_idf in n-grams
+
+```{r}
+Speech_idf = function(idf_count){
+  idf_no = count(idf_count, doc_id, bigram) %>% 
+    bind_tf_idf(bigram, doc_id, n)
+  return(idf_no)
+}
+Speech_bigrams_idf = Speech_idf(Speech_tidy)
+Speech_bigrams_idf 
+Speech_2020_bigrams_idf = Speech_idf(Speech_2020_tidy)
+Speech_2020_bigrams_idf
+Speech_2021_bigrams_idf = Speech_idf(Speech_2021_tidy)
+Speech_2021_bigrams_idf
+```
+
+```{r}
+Speech_sort = function(bigr_idf){
+  bigr_rank = arrange(bigr_idf, desc(tf_idf))
+  return(bigr_rank)
+}
+
+Speech_sort(Speech_bigrams_idf)
+Speech_sort(Speech_2020_bigrams_idf)
+Speech_sort(Speech_2021_bigrams_idf)
+```
+
+
+# 10: tf-idf plot
+
+```{r}
+Speech_bigrams_idf %>%
+  group_by(doc_id) %>%
+  slice_max(tf_idf, n = 10) %>%
+  ungroup() %>%
+  ggplot() +
+  aes(x = tf_idf, 
+      y = fct_reorder(bigram, tf_idf), 
+      fill = doc_id) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ doc_id, scales = "free") +
+  labs(x = "tf-idf", y = NULL) +
+  theme_minimal()
+```
+
+# 11: Creating and Visualizing the Bigrams network
+The operation visualizes the words thet commonly co-occur in the bigrams. 
+We first count the bigrams then use 'graph_from_data_frame()' command from the igraph package to reformat the data.
+
+```{r}
+Speech_graph = Speech_tidy %>% 
+  count(word1, word2) %>% # we need the words separated for this graph
+  filter(n > 3) %>% 
+  graph_from_data_frame()
+```
+
+Now, plot the graph using `ggraph()` from the eponymous package
+
+```{r}
+set.seed(2021)
+ggraph(Speech_graph, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name), 
+                 vjust = 1, hjust = 1)
+```
+
+The graph now shows the words that occur together. We can improve the graph by including arrows to show how the bigrams are ordered.
+
+Create a object 'a' that creates the arrow shape.
+
+```{r}
+a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+```
+
+Now plot the graph.
+
+```{r}
+ggraph(Speech_graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), # the links are more transparent if the bigram is rare
+                 show.legend = FALSE,
+                 arrow = a, end_cap = circle(.03, 'inches')) + #adding the arrows, making sure they don't touch the node
+  geom_node_point(color = "#34013f", size = 3) + # larger, purple nodes
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void() +
+  labs(title = 'Bigrams (two-word combinations) in "Madaraka Day Speech 2020 and 2021"')
+```
+
+
